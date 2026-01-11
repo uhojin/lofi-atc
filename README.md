@@ -16,7 +16,7 @@ A web application that streams lofi music from various sources mixed with real a
 - 🔀 **Seamless Switching**: Change ATC stations and music sources on the fly
 - 🎛️ **Independent Volume Controls**: Mix ATC and music to your preference
 - ⚡ **High Performance**: Rust backend with efficient stream proxying
-- 🎨 **Retro ATC Aesthetic**: Terminal green UI inspired by classic radar displays
+- 🎨 **Retro ATC Aesthetic**: Retro UI inspired by pixel designs
 
 ## Architecture
 
@@ -25,7 +25,6 @@ A web application that streams lofi music from various sources mixed with real a
 - Dual-track audio engine (ATC + Music)
 - Independent gain control for each source
 - Smooth crossfading between sources
-- Retro radar green UI theme
 
 ### Backend (Rust + Axum + Tokio)
 - **Stream Proxying**: Handles CORS and provides unified audio interface
@@ -59,7 +58,7 @@ lofi-atc/
 
 ### Prerequisites
 
-- **Node.js 18+** (for frontend)
+- **Node.js 20+** (for frontend)
 - **Rust 1.70+** (for backend)
 - **yt-dlp** (for YouTube extraction)
   ```bash
