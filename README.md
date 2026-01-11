@@ -1,18 +1,25 @@
 # Lofi ATC Radio
 
+![main](https://github.com/user-attachments/assets/7eaceba1-8df4-48fb-8525-92002c7fe8c4)
+
 A web application that streams lofi music from various sources mixed with real air traffic control (ATC) radio audio from LiveATC.net.
 
 ## Features
+<img width="675" height="771" alt="music-selection" src="https://github.com/user-attachments/assets/4adee567-f379-44b2-84b5-fe74f5d1e9a6" />
 
 - 🎵 **Multi-Source Music Streaming**:
   - YouTube live streams (Lofi Girl, College Music, Synthwave Radio)
   - Automatic stream URL extraction via yt-dlp
   - Future: Spotify, SoundCloud, custom sources
+ 
+<img width="675" height="771" alt="station-selection" src="https://github.com/user-attachments/assets/07a67d85-08e6-4736-93cc-5850ff4911f2" />
+
 - 📻 **Real ATC Radio**: Live audio from LiveATC.net
   - JFK Tower (New York)
   - LAX Tower North (Los Angeles)
   - ORD Tower North (Chicago O'Hare)
   - CYYZ Apron (Toronto Pearson)
+  - CYYZ Tower (Toronto Pearson)
 - 🔀 **Seamless Switching**: Change ATC stations and music sources on the fly
 - 🎛️ **Independent Volume Controls**: Mix ATC and music to your preference
 - ⚡ **High Performance**: Rust backend with efficient stream proxying
