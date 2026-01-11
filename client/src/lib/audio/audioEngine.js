@@ -84,6 +84,42 @@ export class AudioEngine {
     }
   }
 
+  pause() {
+    if (this.atcAudioElement && !this.atcAudioElement.paused) {
+      this.atcAudioElement.pause();
+    }
+    if (this.musicAudioElement && !this.musicAudioElement.paused) {
+      this.musicAudioElement.pause();
+    }
+  }
+
+  async resume() {
+    try {
+      if (this.audioContext && this.audioContext.state === 'suspended') {
+        await this.audioContext.resume();
+      }
+
+      const promises = [];
+      if (this.atcAudioElement && this.atcAudioElement.paused && this.atcAudioElement.src) {
+        promises.push(this.atcAudioElement.play());
+      }
+      if (this.musicAudioElement && this.musicAudioElement.paused && this.musicAudioElement.src) {
+        promises.push(this.musicAudioElement.play());
+      }
+
+      await Promise.all(promises);
+    } catch (error) {
+      console.error('Failed to resume playback:', error);
+      throw error;
+    }
+  }
+
+  isPaused() {
+    const atcPaused = !this.atcAudioElement || this.atcAudioElement.paused || !this.atcAudioElement.src;
+    const musicPaused = !this.musicAudioElement || this.musicAudioElement.paused || !this.musicAudioElement.src;
+    return atcPaused && musicPaused;
+  }
+
   stopAtc() {
     if (this.atcAudioElement) {
       this.atcAudioElement.pause();

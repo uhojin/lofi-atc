@@ -12,6 +12,7 @@ use std::process::{Command, Stdio};
 use tokio::process::Command as TokioCommand;
 use tokio_util::io::ReaderStream;
 use tower_http::cors::{CorsLayer, Any};
+use tower_http::services::ServeDir;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -66,16 +67,21 @@ async fn main() {
         .allow_headers(Any);
 
     let app = Router::new()
-        .route("/", get(health_check))
         .route("/api/health", get(health_check))
         .route("/api/atc-stations", get(get_atc_stations))
         .route("/api/music-sources", get(get_music_sources))
         .route("/api/proxy/stream", get(proxy_stream))
         .route("/api/youtube/extract", get(extract_youtube_url))
         .route("/api/stream/music/:source_id", get(stream_music))
+        .nest_service("/", ServeDir::new("../client/dist"))
         .layer(cors);
 
-    let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
+    // Bind to 0.0.0.0 for production, use PORT env var or default to 3000
+    let port = std::env::var("PORT")
+        .unwrap_or_else(|_| "3000".to_string())
+        .parse::<u16>()
+        .unwrap_or(3000);
+    let addr = SocketAddr::from(([0, 0, 0, 0], port));
     tracing::info!("Lofi ATC Server listening on {}", addr);
 
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
@@ -119,9 +125,17 @@ async fn get_atc_stations() -> Json<ApiResponse<Vec<AtcStation>>> {
             id: "cyyz9".to_string(),
             name: "Toronto Pearson Apron".to_string(),
             airport_code: "CYYZ".to_string(),
-            frequency: "Apron".to_string(),
+            frequency: "122.275".to_string(),
             description: "Toronto Pearson Apron".to_string(),
             stream_url: "http://d.liveatc.net/cyyz9".to_string(),
+        },
+        AtcStation {
+            id: "cyyz7".to_string(),
+            name: "Toronto Pearson Tower".to_string(),
+            airport_code: "CYYZ".to_string(),
+            frequency: "118.700".to_string(),
+            description: "Toronto Pearson International Tower".to_string(),
+            stream_url: "http://d.liveatc.net/cyyz7".to_string(),
         },
     ];
 
@@ -170,102 +184,98 @@ async fn get_music_sources() -> Json<ApiResponse<Vec<MusicSource>>> {
 }
 
 async fn proxy_stream(Query(params): Query<ProxyQuery>) -> Response {
-    let stream_url = params.url.clone();
+    let mut stream_url = params.url.clone();
 
     tracing::info!("Proxying stream from: {}", stream_url);
 
-    let client = reqwest::Client::new();
+    let client = reqwest::Client::builder()
+        .danger_accept_invalid_certs(true)
+        .connect_timeout(std::time::Duration::from_secs(30))
+        .pool_idle_timeout(None)
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .unwrap();
 
-    match client.get(&stream_url).send().await {
-        Ok(response) => {
-            let is_manifest = stream_url.contains(".m3u8") || stream_url.contains("/manifest/");
+    // Manually follow redirects, fixing malformed HTTPS:80 URLs
+    let mut redirect_count = 0;
+    let max_redirects = 10;
 
-            if is_manifest {
-                match response.text().await {
-                    Ok(manifest_content) => {
-                        let rewritten_manifest = rewrite_m3u8_manifest(&manifest_content, &stream_url);
+    loop {
+        // Fix malformed HTTPS:80 URLs from LiveATC
+        if stream_url.starts_with("https://") && stream_url.contains(":80/") {
+            stream_url = stream_url.replace("https://", "http://");
+            tracing::debug!("Rewrote HTTPS:80 to HTTP: {}", stream_url);
+        }
 
-                        let mut headers = HeaderMap::new();
-                        headers.insert(header::CONTENT_TYPE, "application/vnd.apple.mpegurl".parse().unwrap());
-                        headers.insert(header::CACHE_CONTROL, "no-cache".parse().unwrap());
-                        headers.insert(header::ACCESS_CONTROL_ALLOW_ORIGIN, "*".parse().unwrap());
+        let response = match client.get(&stream_url).send().await {
+            Ok(resp) => resp,
+            Err(e) => {
+                tracing::error!("Failed to proxy stream: {}", e);
+                return (
+                    StatusCode::BAD_GATEWAY,
+                    format!("Failed to connect to stream: {}", e),
+                ).into_response();
+            }
+        };
 
-                        (headers, rewritten_manifest).into_response()
-                    }
-                    Err(e) => {
-                        tracing::error!("Failed to read HLS manifest: {}", e);
-                        (StatusCode::INTERNAL_SERVER_ERROR, "Failed to read HLS manifest").into_response()
-                    }
-                }
+        let status = response.status();
+
+        // Handle redirects
+        if status.is_redirection() {
+            if redirect_count >= max_redirects {
+                tracing::error!("Too many redirects for: {}", stream_url);
+                return (StatusCode::BAD_GATEWAY, "Too many redirects").into_response();
+            }
+
+            if let Some(location) = response.headers().get(header::LOCATION) {
+                stream_url = location.to_str().unwrap_or("").to_string();
+                tracing::debug!("Following redirect to: {}", stream_url);
+                redirect_count += 1;
+                continue;
             } else {
-                let original_content_type = response
-                    .headers()
-                    .get(header::CONTENT_TYPE)
-                    .and_then(|v| v.to_str().ok())
-                    .unwrap_or("application/octet-stream");
-
-                tracing::debug!("Proxying binary stream, Content-Type: {} for URL: {}", original_content_type, &stream_url);
-
-                let mut headers = HeaderMap::new();
-                headers.insert(header::CONTENT_TYPE, original_content_type.parse().unwrap());
-                headers.insert(header::CACHE_CONTROL, "no-cache".parse().unwrap());
-                headers.insert(header::ACCESS_CONTROL_ALLOW_ORIGIN, "*".parse().unwrap());
-                headers.insert(header::ACCESS_CONTROL_EXPOSE_HEADERS, "*".parse().unwrap());
-
-                if let Some(content_length) = response.headers().get(header::CONTENT_LENGTH) {
-                    headers.insert(header::CONTENT_LENGTH, content_length.clone());
-                }
-
-                let stream = response.bytes_stream();
-                let body = Body::from_stream(stream);
-
-                (headers, body).into_response()
+                tracing::error!("Redirect without Location header");
+                return (StatusCode::BAD_GATEWAY, "Invalid redirect").into_response();
             }
         }
-        Err(e) => {
-            tracing::error!("Failed to proxy stream: {}", e);
-            (
-                StatusCode::BAD_GATEWAY,
-                format!("Failed to connect to stream: {}", e),
-            )
-                .into_response()
-        }
+
+        // Not a redirect, process the response
+        tracing::info!("Successfully connected to stream: {}", stream_url);
+
+        break match handle_stream_response(response, &stream_url).await {
+            Ok(resp) => resp,
+            Err(e) => {
+                tracing::error!("Failed to handle stream response: {}", e);
+                (StatusCode::INTERNAL_SERVER_ERROR, format!("Stream error: {}", e)).into_response()
+            }
+        };
     }
 }
 
-fn rewrite_m3u8_manifest(manifest: &str, base_url: &str) -> String {
-    let mut result = String::new();
-    let base_url_parsed = url::Url::parse(base_url).ok();
+async fn handle_stream_response(response: reqwest::Response, stream_url: &str) -> Result<Response, String> {
+    let original_content_type = response
+        .headers()
+        .get(header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("application/octet-stream");
 
-    for line in manifest.lines() {
-        if line.starts_with("#") || line.trim().is_empty() {
-            result.push_str(line);
-            result.push('\n');
-        } else if line.starts_with("http://") || line.starts_with("https://") {
-            let proxied_url = format!("http://localhost:3000/api/proxy/stream?url={}",
-                urlencoding::encode(line));
-            result.push_str(&proxied_url);
-            result.push('\n');
-        } else {
-            if let Some(base) = &base_url_parsed {
-                if let Ok(resolved) = base.join(line) {
-                    let proxied_url = format!("http://localhost:3000/api/proxy/stream?url={}",
-                        urlencoding::encode(resolved.as_str()));
-                    result.push_str(&proxied_url);
-                    result.push('\n');
-                } else {
-                    result.push_str(line);
-                    result.push('\n');
-                }
-            } else {
-                result.push_str(line);
-                result.push('\n');
-            }
-        }
+    tracing::debug!("Proxying stream, Content-Type: {} for URL: {}", original_content_type, &stream_url);
+
+    let mut headers = HeaderMap::new();
+    headers.insert(header::CONTENT_TYPE, original_content_type.parse().unwrap());
+    headers.insert(header::CACHE_CONTROL, "no-cache".parse().unwrap());
+    headers.insert(header::ACCESS_CONTROL_ALLOW_ORIGIN, "*".parse().unwrap());
+    headers.insert(header::ACCESS_CONTROL_EXPOSE_HEADERS, "*".parse().unwrap());
+
+    if let Some(content_length) = response.headers().get(header::CONTENT_LENGTH) {
+        headers.insert(header::CONTENT_LENGTH, content_length.clone());
     }
 
-    result
+    let stream = response.bytes_stream();
+    let body = Body::from_stream(stream);
+
+    Ok((headers, body).into_response())
 }
+
 
 async fn extract_youtube_url(Query(params): Query<ProxyQuery>) -> Response {
     let youtube_url = params.url;

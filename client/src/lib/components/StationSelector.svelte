@@ -30,15 +30,13 @@
 
 <style>
   .station-selector {
-    margin: 1.5rem 0;
+    margin: 0;
   }
 
   .section-title {
-    color: #00ff00;
+    color: #333;
     font-size: 1.2rem;
     margin-bottom: 1rem;
-    text-transform: uppercase;
-    letter-spacing: 2px;
     font-weight: 600;
   }
 
@@ -49,23 +47,23 @@
   }
 
   .station-button {
-    background: #0a0a0a;
-    border: 2px solid #00ff00;
-    padding: 1rem;
+    background: #ffffff;
+    border: 2px solid #333;
+    padding: 1.25rem;
     cursor: pointer;
-    transition: all 0.3s ease;
-    color: #00ff00;
-    font-family: monospace;
+    transition: all 0.2s ease;
+    color: #333;
+    font-family: inherit;
   }
 
   .station-button:hover {
-    background: #1a1a1a;
-    box-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
+    background: #f8f8f8;
+    border-color: #000;
   }
 
   .station-button.active {
-    background: #00ff00;
-    color: #000;
+    background: #333;
+    color: #ffffff;
     font-weight: bold;
   }
 
@@ -82,6 +80,6 @@
 
   .frequency {
     font-size: 0.75rem;
-    opacity: 0.8;
+    opacity: 0.7;
   }
 </style>

@@ -34,40 +34,38 @@
 
 <style>
   .music-selector {
-    margin: 1.5rem 0;
+    margin: 0;
   }
 
   .section-title {
-    color: #00ff00;
+    color: #333;
     font-size: 1.2rem;
     margin-bottom: 1rem;
-    text-transform: uppercase;
-    letter-spacing: 2px;
     font-weight: 600;
   }
 
   .source-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
     gap: 1rem;
   }
 
   .source-button {
-    background: #0a0a0a;
-    border: 2px solid #00ff00;
+    background: #ffffff;
+    border: 2px solid #333;
     padding: 0;
     cursor: pointer;
-    transition: all 0.3s ease;
+    transition: all 0.2s ease;
     overflow: hidden;
   }
 
   .source-button:hover {
-    box-shadow: 0 0 15px rgba(0, 255, 0, 0.5);
+    border-color: #000;
   }
 
   .source-button.active {
-    border-color: #00ff00;
-    box-shadow: 0 0 20px rgba(0, 255, 0, 0.8);
+    border-color: #000;
+    box-shadow: 0 0 8px rgba(0, 0, 0, 0.3);
   }
 
   .thumbnail {
@@ -75,34 +73,33 @@
     height: 140px;
     object-fit: cover;
     display: block;
-    filter: grayscale(80%);
-    transition: filter 0.3s;
+    transition: opacity 0.2s;
+    opacity: 0.9;
   }
 
   .source-button:hover .thumbnail {
-    filter: grayscale(20%);
+    opacity: 1;
   }
 
   .source-button.active .thumbnail {
-    filter: grayscale(0%);
+    opacity: 1;
   }
 
   .source-info {
     padding: 0.75rem;
-    background: #0a0a0a;
+    background: #ffffff;
   }
 
   .source-name {
-    color: #00ff00;
-    font-size: 0.9rem;
+    color: #333;
+    font-size: 0.85rem;
     margin-bottom: 0.25rem;
-    font-family: monospace;
+    font-family: inherit;
   }
 
   .source-type {
-    color: #00ff00;
+    color: #666;
     font-size: 0.7rem;
-    opacity: 0.6;
-    font-family: monospace;
+    font-family: inherit;
   }
 </style>
