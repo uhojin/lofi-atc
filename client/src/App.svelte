@@ -1,6 +1,5 @@
 <script>
   import { onMount, onDestroy } from 'svelte';
-  import { slide } from 'svelte/transition';
   import { AudioEngine } from './lib/audio/audioEngine.js';
   import { getAtcStations, getMusicSources, getProxyUrl, getMusicStreamUrl } from './lib/api.js';
   import Card from './lib/components/ui/card.svelte';
@@ -23,7 +22,31 @@
   let error = null;
   let showStationSelector = false;
   let showMusicSelector = false;
-  let showVolumeControls = false;
+  let musicTitleRef;
+  let shouldScrollTitle = false;
+
+  function checkTitleOverflow() {
+    if (musicTitleRef) {
+      const scrollWidth = musicTitleRef.scrollWidth;
+      const clientWidth = musicTitleRef.clientWidth;
+      shouldScrollTitle = scrollWidth > clientWidth;
+    }
+  }
+
+  // Reactive statement to check overflow when music source changes
+  $: if (selectedMusicSource && musicTitleRef) {
+    setTimeout(checkTitleOverflow, 100);
+  }
+
+  function handleKeyPress(e) {
+    // Check if spacebar is pressed
+    if (e.code === 'Space' || e.key === ' ') {
+      // Prevent default scrolling behavior
+      e.preventDefault();
+      // Toggle play/pause
+      togglePlayPause();
+    }
+  }
 
   onMount(async () => {
     try {
@@ -42,12 +65,19 @@
       error = 'Failed to connect to server. Make sure the backend is running on port 3000.';
       loading = false;
     }
+
+    // Add resize listener to re-check title overflow
+    window.addEventListener('resize', checkTitleOverflow);
+    // Add spacebar listener for play/pause
+    window.addEventListener('keydown', handleKeyPress);
   });
 
   onDestroy(() => {
     if (audioEngine) {
       audioEngine.destroy();
     }
+    window.removeEventListener('resize', checkTitleOverflow);
+    window.removeEventListener('keydown', handleKeyPress);
   });
 
   async function handleAtcStationSelect(station) {
@@ -93,6 +123,9 @@
 
       selectedMusicSource = source;
       error = null;
+
+      // Check title overflow after selection
+      setTimeout(checkTitleOverflow, 100);
     } catch (err) {
       console.error('Failed to play music source:', err);
       error = 'Failed to play music stream. The source might be unavailable.';
@@ -169,9 +202,12 @@
           <p class="text-xs sm:text-sm text-muted-foreground">Mix lofi beats with live air traffic control</p>
         </div>
 
-        <div class="relative">
+        <!-- Dual Card Container -->
+        <div class="relative grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5 md:gap-6">
+
+          <!-- Music Source Card -->
           <button
-            class="aspect-square w-full overflow-hidden rounded-lg bg-muted relative group cursor-pointer border border-zinc-800 hover:border-zinc-700 transition-colors"
+            class="group relative aspect-[2/1] md:aspect-square overflow-hidden rounded-lg bg-muted border border-zinc-800 hover:border-zinc-700 transition-all duration-300 cursor-pointer {selectedMusicSource ? 'ring-2 ring-primary/20' : ''}"
             on:click={toggleMusicSelector}
             type="button"
           >
@@ -179,64 +215,134 @@
               <img
                 src={selectedMusicSource.thumbnail}
                 alt={selectedMusicSource.name}
-                class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105 {isPaused ? 'opacity-60' : ''}"
               />
-              <div class="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
-                <svg class="w-16 h-16 text-white opacity-0 group-hover:opacity-100 transition-opacity" xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" {...$$props}><!-- Icon from Pixel Icon by HackerNoon - https://creativecommons.org/licenses/by/4.0/ --><path fill="currentColor" d="M23 1v17h-1v1h-1v1h-4v-1h-1v-1h-1v-3h1v-1h1v-1h3V8h-2v1h-3v1h-4v1H9v10H8v1H7v1H3v-1H2v-1H1v-3h1v-1h1v-1h3V6h2V5h3V4h4V3h3V2h3V1z"/></svg>
-                <!-- <svg class="w-10 h-10 sm:w-12 sm:h-12 text-white opacity-0 group-hover:opacity-100 transition-opacity" xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" {...$$props}>Icon from Pixel Icon by HackerNoon - https://creativecommons.org/licenses/by/4.0/<path fill="currentColor" d="M21 1v1h-3v1h-3v1h-4v1H8v1H6v10H3v1H2v1H1v3h1v1h1v1h4v-1h1v-1h1V11h2v-1h4V9h3V8h2v5h-3v1h-1v1h-1v3h1v1h1v1h4v-1h1v-1h1V1zM3 21v-3h4v3zM18 6v1h-3v1h-4v1H8V7h3V6h4V5h3V4h3v2zm-1 12v-3h4v3z"/></svg> -->
+              <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+
+              <!-- Music Icon Overlay on Hover -->
+              <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                <svg class="w-12 h-12 sm:w-16 sm:h-16 text-white drop-shadow-lg" xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24">
+                  <path fill="currentColor" d="M23 1v17h-1v1h-1v1h-4v-1h-1v-1h-1v-3h1v-1h1v-1h3V8h-2v1h-3v1h-4v1H9v10H8v1H7v1H3v-1H2v-1H1v-3h1v-1h1v-1h3V6h2V5h3V4h4V3h3V2h3V1z"/>
+                </svg>
+              </div>
+
+              <!-- Playing Indicator -->
+              {#if isPlaying && selectedMusicSource}
+                <div class="absolute top-2 right-2 sm:top-3 sm:right-3 flex items-center gap-1.5 px-2 py-1 rounded-full bg-black/60 backdrop-blur-sm border border-white/20">
+                  <div class="w-1.5 h-1.5 bg-green-500 rounded-full {isPaused ? '' : 'animate-pulse'}"></div>
+                  <span class="text-[10px] text-white font-medium uppercase">{isPaused ? 'Paused' : 'Playing'}</span>
+                </div>
+              {/if}
+
+              <!-- Music Info Overlay -->
+              <div class="absolute bottom-0 left-0 right-0 p-3 sm:p-4 bg-gradient-to-t from-black/90 to-transparent overflow-hidden">
+                <h3
+                  bind:this={musicTitleRef}
+                  class="font-semibold text-sm sm:text-base text-white whitespace-nowrap overflow-hidden"
+                >
+                  {#if shouldScrollTitle}
+                    <span class="inline-flex animate-marquee">
+                      <span class="inline-block px-4">{selectedMusicSource.name}</span>
+                      <span class="inline-block px-4">{selectedMusicSource.name}</span>
+                    </span>
+                  {:else}
+                    <span class="inline-block">{selectedMusicSource.name}</span>
+                  {/if}
+                </h3>
+                <p class="text-xs text-white/70 uppercase mt-0.5">{selectedMusicSource.source_type}</p>
               </div>
             {:else}
-              <div class="w-full h-full flex flex-col items-center justify-center text-muted-foreground">
-                <!-- <Music class="w-12 h-12 sm:w-16 sm:h-16 mb-2" /> -->
-                 <svg class="w-12 h-12 sm:w-16 sm:h-16 mb-2" xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" {...$$props}><!-- Icon from Pixel Icon by HackerNoon - https://creativecommons.org/licenses/by/4.0/ --><path fill="currentColor" d="M21 1v1h-3v1h-3v1h-4v1H8v1H6v10H3v1H2v1H1v3h1v1h1v1h4v-1h1v-1h1V11h2v-1h4V9h3V8h2v5h-3v1h-1v1h-1v3h1v1h1v1h4v-1h1v-1h1V1zM3 21v-3h4v3zM18 6v1h-3v1h-4v1H8V7h3V6h4V5h3V4h3v2zm-1 12v-3h4v3z"/></svg>
-                <p class="text-xs sm:text-sm">Select Music Source</p>
+              <!-- Empty State -->
+              <div class="w-full h-full flex flex-col items-center justify-center text-muted-foreground group-hover:text-foreground transition-colors">
+                <svg class="w-12 h-12 sm:w-16 sm:h-16 mb-2 sm:mb-3" xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24">
+                  <path fill="currentColor" d="M21 1v1h-3v1h-3v1h-4v1H8v1H6v10H3v1H2v1H1v3h1v1h1v1h4v-1h1v-1h1V11h2v-1h4V9h3V8h2v5h-3v1h-1v1h-1v3h1v1h1v1h4v-1h1v-1h1V1zM3 21v-3h4v3zM18 6v1h-3v1h-4v1H8V7h3V6h4V5h3V4h3v2zm-1 12v-3h4v3z"/>
+                </svg>
+                <p class="text-xs sm:text-sm font-medium">Select Music</p>
               </div>
             {/if}
           </button>
 
+          <!-- ATC Station Card -->
+          <button
+            class="group relative aspect-[2/1] md:aspect-square overflow-hidden rounded-lg bg-muted border border-zinc-800 hover:border-zinc-700 transition-all duration-300 cursor-pointer {selectedAtcStation ? 'ring-2 ring-primary/20' : ''}"
+            on:click={toggleStationSelector}
+            type="button"
+          >
+            {#if selectedAtcStation}
+              <!-- ATC Visual Background -->
+              <div class="absolute inset-0 bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900">
+                <!-- Decorative Grid Pattern -->
+                <div class="absolute inset-0 opacity-10" style="background-image: repeating-linear-gradient(0deg, transparent, transparent 35px, hsl(var(--primary)) 35px, hsl(var(--primary)) 36px), repeating-linear-gradient(90deg, transparent, transparent 35px, hsl(var(--primary)) 35px, hsl(var(--primary)) 36px);"></div>
+              </div>
+
+              <!-- ATC Icon Centered -->
+              <div class="absolute inset-0 flex items-center justify-center opacity-20 group-hover:opacity-30 transition-opacity">
+                <svg class="w-12 h-12 sm:w-16 sm:h-16" xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24">
+                  <path fill="currentColor" d="M19 2h2v2h-2zm2 14V4h2v12zm0 0v2h-2v-2zM1 4h2v12H1zm2 12h2v2H3zM3 4h2V2H3zm2 2h2v8H5zm2 8h2v2H7zm0-8h2V4H7zm10 0h2v8h-2zm0 0h-2V4h2zm0 8v2h-2v-2zm-6-7h4v6h-2v9h-2v-9H9V7zm0 4h2V9h-2z"/>
+                </svg>
+              </div>
+
+              <!-- Playing Indicator -->
+              {#if isPlaying && selectedAtcStation}
+                <div class="absolute top-2 right-2 sm:top-3 sm:right-3 flex items-center gap-1.5 px-2 py-1 rounded-full bg-black/60 backdrop-blur-sm border border-white/20">
+                  <div class="w-1.5 h-1.5 bg-green-500 rounded-full {isPaused ? '' : 'animate-pulse'}"></div>
+                  <span class="text-[10px] text-white font-medium uppercase">{isPaused ? 'Paused' : 'Live'}</span>
+                </div>
+              {/if}
+
+              <!-- ATC Info Overlay -->
+              <div class="absolute bottom-0 left-0 right-0 p-3 sm:p-4 bg-gradient-to-t from-black/90 to-transparent">
+                <div class="flex items-baseline justify-between gap-2">
+                  <h3 class="text-xl sm:text-2xl font-bold text-white">{selectedAtcStation.airport_code}</h3>
+                  <span class="text-[10px] sm:text-xs text-white/70 tabular-nums">{selectedAtcStation.frequency} MHz</span>
+                </div>
+                <p class="text-xs sm:text-sm text-white/90 line-clamp-1 mt-1">{selectedAtcStation.name}</p>
+              </div>
+
+              <!-- Hover Overlay -->
+              <div class="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors"></div>
+            {:else}
+              <!-- Empty State -->
+              <div class="w-full h-full flex flex-col items-center justify-center text-muted-foreground group-hover:text-foreground transition-colors bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900">
+                <svg class="w-12 h-12 sm:w-16 sm:h-16 mb-2 sm:mb-3" xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24">
+                  <path fill="currentColor" d="M19 2h2v2h-2zm2 14V4h2v12zm0 0v2h-2v-2zM1 4h2v12H1zm2 12h2v2H3zM3 4h2V2H3zm2 2h2v8H5zm2 8h2v2H7zm0-8h2V4H7zm10 0h2v8h-2zm0 0h-2V4h2zm0 8v2h-2v-2zm-6-7h4v6h-2v9h-2v-9H9V7zm0 4h2V9h-2z"/>
+                </svg>
+                <p class="text-xs sm:text-sm font-medium">Select ATC Station</p>
+              </div>
+            {/if}
+          </button>
+
+          <!-- Central Play/Pause Button -->
           {#if isPlaying}
-            <div class="absolute -bottom-6 left-1/2 -translate-x-1/2 z-10">
+            <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10">
               <button
-                class="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-primary text-primary-foreground shadow-2xl hover:scale-105 transition-transform active:scale-95 flex items-center justify-center border-4 border-background"
+                class="w-14 h-14 sm:w-16 sm:h-16 md:w-20 md:h-20 rounded-full bg-primary text-primary-foreground shadow-2xl hover:scale-105 transition-transform active:scale-95 flex items-center justify-center ring-4 ring-primary/30"
                 on:click={togglePlayPause}
                 type="button"
                 aria-label={isPaused ? 'Play' : 'Pause'}
               >
                 {#if isPaused}
-                  <!-- <Play class="w-6 h-6 sm:w-7 sm:h-7 ml-0.5" fill="currentColor" /> -->
-                  <svg class="w-6 h-6 sm:w-7 sm:h-7 ml-0.5" fill="currentColor" xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" {...$$props}><!-- Icon from Pixel Icon by HackerNoon - https://creativecommons.org/licenses/by/4.0/ --><path fill="currentColor" d="M22 11v2h-1v1h-1v1h-2v1h-2v1h-1v1h-2v1h-2v1h-1v1H8v1H6v1H3v-1H2V2h1V1h3v1h2v1h2v1h1v1h2v1h2v1h1v1h2v1h2v1h1v1z"/></svg>
+                  <svg class="w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 ml-0.5" fill="currentColor" xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24">
+                    <path fill="currentColor" d="M22 11v2h-1v1h-1v1h-2v1h-2v1h-1v1h-2v1h-2v1h-1v1H8v1H6v1H3v-1H2V2h1V1h3v1h2v1h2v1h1v1h2v1h2v1h1v1h2v1h2v1h1v1z"/>
+                  </svg>
                 {:else}
-                  <!-- <Pause class="w-6 h-6 sm:w-7 sm:h-7" fill="currentColor" /> -->
-                  <svg class="w-6 h-6 sm:w-7 sm:h-7" xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" {...$$props}><!-- Icon from Pixel Icon by HackerNoon - https://creativecommons.org/licenses/by/4.0/ --><path fill="currentColor" d="M23 2v20h-1v1h-7v-1h-1V2h1V1h7v1zM9 2h1v20H9v1H2v-1H1V2h1V1h7z"/></svg>
+                  <svg class="w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8" xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24">
+                    <path fill="currentColor" d="M23 2v20h-1v1h-7v-1h-1V2h1V1h7v1zM9 2h1v20H9v1H2v-1H1V2h1V1h7z"/>
+                  </svg>
                 {/if}
               </button>
             </div>
           {/if}
         </div>
 
-        {#if selectedMusicSource}
-          <div class="space-y-0.5 sm:space-y-1 {isPlaying ? 'mt-8' : ''}">
-            <h2 class="font-semibold text-sm sm:text-base line-clamp-1">{selectedMusicSource.name}</h2>
-            <div class="flex items-center justify-between">
-              <p class="text-xs text-muted-foreground uppercase">{selectedMusicSource.source_type}</p>
-              {#if isPlaying}
-                <div class="flex items-center gap-1.5">
-                  <div class="w-1.5 h-1.5 bg-green-500 rounded-full {isPaused ? '' : 'animate-pulse'}"></div>
-                  <span class="text-[10px] text-muted-foreground uppercase">{isPaused ? 'Paused' : 'Live'}</span>
-                </div>
-              {/if}
-            </div>
-          </div>
-        {/if}
-
-        <!-- Inline Volume Controls (Desktop/Tablet) -->
+        <!-- Inline Volume Controls -->
         {#if isPlaying}
-          <div class="hidden md:block space-y-4">
+          <div class="space-y-3 sm:space-y-4">
             <div class="space-y-3">
               <div class="flex items-center justify-between">
                 <div class="flex items-center gap-2">
-                  <svg class="w-4 h-4 text-muted-foreground" xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" {...$$props}><!-- Icon from Pixel Icon by HackerNoon - https://creativecommons.org/licenses/by/4.0/ --><path fill="currentColor" d="M21 1v1h-3v1h-3v1h-4v1H8v1H6v10H3v1H2v1H1v3h1v1h1v1h4v-1h1v-1h1V11h2v-1h4V9h3V8h2v5h-3v1h-1v1h-1v3h1v1h1v1h4v-1h1v-1h1V1zM3 21v-3h4v3zM18 6v1h-3v1h-4v1H8V7h3V6h4V5h3V4h3v2zm-1 12v-3h4v3z"/></svg>
-                  <span class="text-sm font-medium">Music</span>
+                  <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4 text-muted-foreground" xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" {...$$props}><!-- Icon from Pixel Icon by HackerNoon - https://creativecommons.org/licenses/by/4.0/ --><path fill="currentColor" d="M21 1v1h-3v1h-3v1h-4v1H8v1H6v10H3v1H2v1H1v3h1v1h1v1h4v-1h1v-1h1V11h2v-1h4V9h3V8h2v5h-3v1h-1v1h-1v3h1v1h1v1h4v-1h1v-1h1V1zM3 21v-3h4v3zM18 6v1h-3v1h-4v1H8V7h3V6h4V5h3V4h3v2zm-1 12v-3h4v3z"/></svg>
+                  <span class="text-xs sm:text-sm font-medium">Music</span>
                 </div>
                 <span class="text-xs text-muted-foreground tabular-nums">{Math.round(musicVolume[0] * 100)}%</span>
               </div>
@@ -253,8 +359,8 @@
             <div class="space-y-3">
               <div class="flex items-center justify-between">
                 <div class="flex items-center gap-2">
-                  <svg class="w-4 h-4 text-muted-foreground" xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" {...$$props}><!-- Icon from Pixelarticons by Gerrit Halfmann - https://github.com/halfmage/pixelarticons/blob/master/LICENSE --><path fill="currentColor" d="M19 2h2v2h-2zm2 14V4h2v12zm0 0v2h-2v-2zM1 4h2v12H1zm2 12h2v2H3zM3 4h2V2H3zm2 2h2v8H5zm2 8h2v2H7zm0-8h2V4H7zm10 0h2v8h-2zm0 0h-2V4h2zm0 8v2h-2v-2zm-6-7h4v6h-2v9h-2v-9H9V7zm0 4h2V9h-2z"/></svg>
-                  <span class="text-sm font-medium">ATC Radio</span>
+                  <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4 text-muted-foreground" xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" {...$$props}><!-- Icon from Pixelarticons by Gerrit Halfmann - https://github.com/halfmage/pixelarticons/blob/master/LICENSE --><path fill="currentColor" d="M19 2h2v2h-2zm2 14V4h2v12zm0 0v2h-2v-2zM1 4h2v12H1zm2 12h2v2H3zM3 4h2V2H3zm2 2h2v8H5zm2 8h2v2H7zm0-8h2V4H7zm10 0h2v8h-2zm0 0h-2V4h2zm0 8v2h-2v-2zm-6-7h4v6h-2v9h-2v-9H9V7zm0 4h2V9h-2z"/></svg>
+                  <span class="text-xs sm:text-sm font-medium">ATC Radio</span>
                 </div>
                 <span class="text-xs text-muted-foreground tabular-nums">{Math.round(atcVolume[0] * 100)}%</span>
               </div>
@@ -269,17 +375,6 @@
             </div>
           </div>
         {/if}
-
-        <Button
-          variant="outline"
-          class="w-full text-xs sm:text-sm h-9 sm:h-10 border-zinc-800 hover:border-zinc-700 hover:bg-zinc-900"
-          on:click={toggleStationSelector}
-        >           
-           <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-2" xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" {...$$props}>Icon from Pixelarticons by Gerrit Halfmann - https://github.com/halfmage/pixelarticons/blob/master/LICENSE<path fill="currentColor" d="M19 2h2v2h-2zm2 14V4h2v12zm0 0v2h-2v-2zM1 4h2v12H1zm2 12h2v2H3zM3 4h2V2H3zm2 2h2v8H5zm2 8h2v2H7zm0-8h2V4H7zm10 0h2v8h-2zm0 0h-2V4h2zm0 8v2h-2v-2zm-6-7h4v6h-2v9h-2v-9H9V7zm0 4h2V9h-2z"/></svg>
-          <span class="truncate">
-            {selectedAtcStation ? `${selectedAtcStation.airport_code} - ${selectedAtcStation.name}` : 'Select ATC Station'}
-          </span>
-        </Button>
 
         {#if error}
           <div class="rounded-lg bg-destructive/10 border border-destructive/20 p-2.5 sm:p-3 text-xs sm:text-sm text-destructive">
@@ -291,28 +386,28 @@
 
     <Sheet bind:open={showMusicSelector} onOpenChange={(open) => showMusicSelector = open}>
       <div class="flex flex-col h-full">
-        <div class="flex items-center justify-between mb-4 sm:mb-6">
-          <h2 class="text-base sm:text-lg font-semibold">Select Music Source</h2>
-          <Button variant="ghost" size="icon" class="h-8 w-8 sm:h-10 sm:w-10" on:click={() => showMusicSelector = false}>
-            <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div class="flex items-center justify-between mb-4 sm:mb-5 md:mb-6">
+          <h2 class="text-xl sm:text-2xl md:text-3xl font-semibold">Select Music Source</h2>
+          <Button variant="ghost" size="icon" class="h-10 w-10 sm:h-11 sm:w-11 md:h-12 md:w-12" on:click={() => showMusicSelector = false}>
+            <svg class="w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </Button>
         </div>
-        <div class="flex-1 overflow-y-auto space-y-2 -mr-2 pr-2">
+        <div class="flex-1 overflow-y-auto space-y-2.5 sm:space-y-3 md:space-y-3.5 -mr-2 pr-2">
           {#each musicSources as source}
             <button
-              class="w-full rounded-lg border border-zinc-800 p-2.5 sm:p-3 text-left transition-colors hover:bg-accent hover:border-zinc-700 {selectedMusicSource?.id === source.id ? 'border-primary bg-accent' : ''}"
+              class="w-full rounded-lg border border-zinc-800 p-3.5 sm:p-4 md:p-5 text-left transition-colors hover:bg-accent hover:border-zinc-700 {selectedMusicSource?.id === source.id ? 'border-primary bg-accent' : ''}"
               on:click={() => handleMusicSelectFromModal(source)}
               type="button"
             >
-              <div class="flex gap-2.5 sm:gap-3">
+              <div class="flex gap-3.5 sm:gap-4 md:gap-5">
                 {#if source.thumbnail}
-                  <img src={source.thumbnail} alt={source.name} class="w-14 h-14 sm:w-16 sm:h-16 rounded object-cover flex-shrink-0" />
+                  <img src={source.thumbnail} alt={source.name} class="w-18 h-18 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded object-cover flex-shrink-0" />
                 {/if}
                 <div class="flex-1 min-w-0">
-                  <p class="font-medium text-xs sm:text-sm line-clamp-2 mb-1">{source.name}</p>
-                  <p class="text-[10px] sm:text-xs text-muted-foreground uppercase">{source.source_type}</p>
+                  <p class="font-medium text-base sm:text-lg md:text-xl line-clamp-2 mb-1.5">{source.name}</p>
+                  <p class="text-sm sm:text-base md:text-lg text-muted-foreground uppercase">{source.source_type}</p>
                 </div>
               </div>
             </button>
@@ -323,28 +418,28 @@
 
     <Sheet bind:open={showStationSelector} onOpenChange={(open) => showStationSelector = open}>
       <div class="flex flex-col h-full">
-        <div class="flex items-center justify-between mb-4 sm:mb-6">
-          <h2 class="text-base sm:text-lg font-semibold">Select ATC Station</h2>
-          <Button variant="ghost" size="icon" class="h-8 w-8 sm:h-10 sm:w-10" on:click={() => showStationSelector = false}>
-            <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div class="flex items-center justify-between mb-4 sm:mb-5 md:mb-6">
+          <h2 class="text-xl sm:text-2xl md:text-3xl font-semibold">Select ATC Station</h2>
+          <Button variant="ghost" size="icon" class="h-10 w-10 sm:h-11 sm:w-11 md:h-12 md:w-12" on:click={() => showStationSelector = false}>
+            <svg class="w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </Button>
         </div>
-        <div class="flex-1 overflow-y-auto space-y-2 -mr-2 pr-2">
+        <div class="flex-1 overflow-y-auto space-y-2.5 sm:space-y-3 md:space-y-3.5 -mr-2 pr-2">
           {#each atcStations as station}
             <button
-              class="w-full rounded-lg border border-zinc-800 p-3 sm:p-4 text-left transition-colors hover:bg-accent hover:border-zinc-700 {selectedAtcStation?.id === station.id ? 'border-primary bg-accent' : ''}"
+              class="w-full rounded-lg border border-zinc-800 p-3.5 sm:p-4 md:p-5 text-left transition-colors hover:bg-accent hover:border-zinc-700 {selectedAtcStation?.id === station.id ? 'border-primary bg-accent' : ''}"
               on:click={() => handleStationSelectFromModal(station)}
               type="button"
             >
-              <div class="space-y-1">
+              <div class="space-y-1.5 sm:space-y-2 md:space-y-2.5">
                 <div class="flex items-center justify-between gap-2">
-                  <span class="text-base sm:text-lg font-bold">{station.airport_code}</span>
-                  <span class="text-[10px] sm:text-xs text-muted-foreground tabular-nums">{station.frequency} MHz</span>
+                  <span class="text-xl sm:text-2xl md:text-3xl font-bold">{station.airport_code}</span>
+                  <span class="text-sm sm:text-base md:text-lg text-muted-foreground tabular-nums">{station.frequency} MHz</span>
                 </div>
-                <p class="text-xs sm:text-sm text-muted-foreground">{station.name}</p>
-                <p class="text-[10px] sm:text-xs text-muted-foreground">{station.description}</p>
+                <p class="text-base sm:text-lg md:text-xl text-muted-foreground">{station.name}</p>
+                <p class="text-sm sm:text-base md:text-lg text-muted-foreground">{station.description}</p>
               </div>
             </button>
           {/each}
@@ -352,78 +447,6 @@
       </div>
     </Sheet>
 
-    <!-- Floating Action Button for Volume (Mobile Only) -->
-    {#if isPlaying}
-      <div class="md:hidden fixed bottom-6 right-6 z-40">
-        {#if showVolumeControls}
-          <div
-            class="mb-3 w-72 sm:w-80 p-4 sm:p-5 rounded-xl border border-zinc-800 bg-card shadow-2xl space-y-4"
-            transition:slide={{ duration: 200 }}
-          >
-            <div class="flex items-center justify-between mb-3">
-              <h3 class="text-sm font-semibold">Volume Controls</h3>
-              <button
-                class="text-muted-foreground hover:text-foreground transition-colors"
-                on:click={() => showVolumeControls = false}
-                type="button"
-                aria-label="Close volume controls"
-              >
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            <div class="space-y-3">
-              <div class="flex items-center justify-between">
-                <div class="flex items-center gap-2">
-                  <svg class="w-4 h-4 text-muted-foreground" xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" {...$$props}><!-- Icon from Pixel Icon by HackerNoon - https://creativecommons.org/licenses/by/4.0/ --><path fill="currentColor" d="M21 1v1h-3v1h-3v1h-4v1H8v1H6v10H3v1H2v1H1v3h1v1h1v1h4v-1h1v-1h1V11h2v-1h4V9h3V8h2v5h-3v1h-1v1h-1v3h1v1h1v1h4v-1h1v-1h1V1zM3 21v-3h4v3zM18 6v1h-3v1h-4v1H8V7h3V6h4V5h3V4h3v2zm-1 12v-3h4v3z"/></svg>
-                  <span class="text-xs font-medium">Music</span>
-                </div>
-                <span class="text-xs text-muted-foreground tabular-nums">{Math.round(musicVolume[0] * 100)}%</span>
-              </div>
-              <Slider
-                bind:value={musicVolume}
-                onValueChange={handleMusicVolumeChange}
-                min={0}
-                max={1}
-                step={0.01}
-                class="touch-manipulation"
-              />
-            </div>
-
-            <div class="space-y-3">
-              <div class="flex items-center justify-between">
-                <div class="flex items-center gap-2">
-                  <!-- <Radio class="w-4 h-4 text-muted-foreground" /> -->
-                  <svg class="w-4 h-4 text-muted-foreground" xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" {...$$props}><!-- Icon from Pixelarticons by Gerrit Halfmann - https://github.com/halfmage/pixelarticons/blob/master/LICENSE --><path fill="currentColor" d="M19 2h2v2h-2zm2 14V4h2v12zm0 0v2h-2v-2zM1 4h2v12H1zm2 12h2v2H3zM3 4h2V2H3zm2 2h2v8H5zm2 8h2v2H7zm0-8h2V4H7zm10 0h2v8h-2zm0 0h-2V4h2zm0 8v2h-2v-2zm-6-7h4v6h-2v9h-2v-9H9V7zm0 4h2V9h-2z"/></svg>
-                  <span class="text-xs font-medium">ATC Radio</span>
-                </div>
-                <span class="text-xs text-muted-foreground tabular-nums">{Math.round(atcVolume[0] * 100)}%</span>
-              </div>
-              <Slider
-                bind:value={atcVolume}
-                onValueChange={handleAtcVolumeChange}
-                min={0}
-                max={1}
-                step={0.01}
-                class="touch-manipulation"
-              />
-            </div>
-          </div>
-        {/if}
-
-        <button
-          class="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-primary text-primary-foreground shadow-2xl hover:scale-105 transition-all active:scale-95 flex items-center justify-center ml-auto"
-          on:click={() => showVolumeControls = !showVolumeControls}
-          type="button"
-          aria-label="Toggle volume controls"
-        >
-          <!-- <Volume2 class="w-6 h-6 sm:w-7 sm:h-7" /> -->
-          <svg class="w-6 h-6 sm:w-7 sm:h-7" xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" {...$$props}><!-- Icon from Pixel Icon by HackerNoon - https://creativecommons.org/licenses/by/4.0/ --><path fill="currentColor" d="M14 2v20h-3v-1h-1v-1H9v-1H8v-1H7v-1H6v-1H1V8h5V7h1V6h1V5h1V4h1V3h1V2zm3 13v-1h-1v-1h1v-2h-1v-1h1V9h1v1h1v4h-1v1z"/><path fill="currentColor" d="M23 10v4h-1v2h-1v1h-1v1h-1v-1h-1v-1h1v-1h1v-1h1v-4h-1V9h-1V8h-1V7h1V6h1v1h1v1h1v2z"/></svg>
-        </button>
-      </div>
-    {/if}
   {/if}
 
   <!-- Footer Attribution -->
@@ -435,3 +458,17 @@
   </footer>
 </main>
 
+<style>
+  @keyframes marquee {
+    0% {
+      transform: translateX(0%);
+    }
+    100% {
+      transform: translateX(-50%);
+    }
+  }
+
+  .animate-marquee {
+    animation: marquee 15s linear infinite;
+  }
+</style>
