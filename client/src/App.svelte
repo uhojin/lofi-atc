@@ -253,7 +253,7 @@
               </div>
             {:else}
               <!-- Empty State -->
-              <div class="w-full h-full flex flex-col items-center justify-center text-muted-foreground group-hover:text-foreground transition-colors">
+              <div class="w-full h-full flex flex-col items-center justify-center text-muted-foreground group-hover:text-foreground transition-colors bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900">
                 <svg class="w-12 h-12 sm:w-16 sm:h-16 mb-2 sm:mb-3" xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24">
                   <path fill="currentColor" d="M21 1v1h-3v1h-3v1h-4v1H8v1H6v10H3v1H2v1H1v3h1v1h1v1h4v-1h1v-1h1V11h2v-1h4V9h3V8h2v5h-3v1h-1v1h-1v3h1v1h1v1h4v-1h1v-1h1V1zM3 21v-3h4v3zM18 6v1h-3v1h-4v1H8V7h3V6h4V5h3V4h3v2zm-1 12v-3h4v3z"/>
                 </svg>
@@ -272,7 +272,7 @@
               <!-- ATC Visual Background -->
               <div class="absolute inset-0 bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900">
                 <!-- Decorative Grid Pattern -->
-                <div class="absolute inset-0 opacity-10" style="background-image: repeating-linear-gradient(0deg, transparent, transparent 35px, hsl(var(--primary)) 35px, hsl(var(--primary)) 36px), repeating-linear-gradient(90deg, transparent, transparent 35px, hsl(var(--primary)) 35px, hsl(var(--primary)) 36px);"></div>
+                <div class="absolute inset-0 opacity-10" style="background-image: repeating-linear-gradient(0deg, transparent, transparent 35px, #fbbf24 35px, #fbbf24 36px), repeating-linear-gradient(90deg, transparent, transparent 35px, #fbbf24 35px, #fbbf24 36px);"></div>
               </div>
 
               <!-- ATC Icon Centered -->
