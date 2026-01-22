@@ -167,11 +167,15 @@ export class AudioEngine {
     const currentTime = this.audioContext.currentTime;
     this.atcGainNode.gain.linearRampToValueAtTime(0, currentTime + fadeDuration / 2);
 
-    setTimeout(async () => {
-      await this.playAtc(streamUrl);
-      const resumeTime = this.audioContext.currentTime;
-      this.atcGainNode.gain.linearRampToValueAtTime(targetVolume, resumeTime + fadeDuration / 2);
-    }, (fadeDuration / 2) * 1000);
+    // Wait for fade out using Promise-based delay so errors propagate
+    await new Promise(resolve => setTimeout(resolve, (fadeDuration / 2) * 1000));
+
+    // Play new stream (errors will propagate!)
+    await this.playAtc(streamUrl);
+
+    // Fade in
+    const resumeTime = this.audioContext.currentTime;
+    this.atcGainNode.gain.linearRampToValueAtTime(targetVolume, resumeTime + fadeDuration / 2);
   }
 
   async switchMusicSource(streamUrl, fadeDuration = 0.5) {
@@ -181,11 +185,15 @@ export class AudioEngine {
     const currentTime = this.audioContext.currentTime;
     this.musicGainNode.gain.linearRampToValueAtTime(0, currentTime + fadeDuration / 2);
 
-    setTimeout(async () => {
-      await this.playMusic(streamUrl);
-      const resumeTime = this.audioContext.currentTime;
-      this.musicGainNode.gain.linearRampToValueAtTime(targetVolume, resumeTime + fadeDuration / 2);
-    }, (fadeDuration / 2) * 1000);
+    // Wait for fade out using Promise-based delay so errors propagate
+    await new Promise(resolve => setTimeout(resolve, (fadeDuration / 2) * 1000));
+
+    // Play new stream (errors will propagate!)
+    await this.playMusic(streamUrl);
+
+    // Fade in
+    const resumeTime = this.audioContext.currentTime;
+    this.musicGainNode.gain.linearRampToValueAtTime(targetVolume, resumeTime + fadeDuration / 2);
   }
 
   destroy() {
