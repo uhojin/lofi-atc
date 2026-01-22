@@ -137,6 +137,14 @@ async fn get_atc_stations() -> Json<ApiResponse<Vec<AtcStation>>> {
             description: "Toronto Pearson International Tower".to_string(),
             stream_url: "http://d.liveatc.net/cyyz7".to_string(),
         },
+        AtcStation {
+            id: "cyyz_gnd_121650".to_string(),
+            name: "Toronto Pearson Ground".to_string(),
+            airport_code: "CYYZ".to_string(),
+            frequency: "121.65".to_string(),
+            description: "Toronto Pearson Ground".to_string(),
+            stream_url: "http://d.liveatc.net/cyyz_gnd_121650".to_string(),
+        }
     ];
 
     Json(ApiResponse {
@@ -383,28 +391,60 @@ async fn stream_music(Path(source_id): Path<String>) -> Response {
     let source = source.unwrap();
     let youtube_url = &source.stream_url;
 
-    tracing::info!("Starting ffmpeg pipeline for: {}", youtube_url);
+    tracing::info!("Extracting direct stream URL for: {}", youtube_url);
 
-    // Use shell to pipe yt-dlp to ffmpeg
-    // yt-dlp -f ba -o - [url] | ffmpeg -i pipe:0 -f mp3 -b:a 128k -vn pipe:1
-    let command = format!(
-        "yt-dlp -f 'ba/b' -o - '{}' 2>/dev/null | ffmpeg -i pipe:0 -f mp3 -b:a 128k -vn -loglevel error pipe:1",
-        youtube_url
-    );
+    // Step 1: Extract direct stream URL using yt-dlp --get-url (faster than piping)
+    let extract_output = Command::new("yt-dlp")
+        .args(&["-f", "ba/b", "--get-url", youtube_url])
+        .output();
 
-    let mut child = match TokioCommand::new("sh")
-        .arg("-c")
-        .arg(&command)
+    let direct_url = match extract_output {
+        Ok(result) => {
+            if result.status.success() {
+                String::from_utf8_lossy(&result.stdout).trim().to_string()
+            } else {
+                let error_msg = String::from_utf8_lossy(&result.stderr);
+                tracing::error!("yt-dlp extraction failed: {}", error_msg);
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("Failed to extract YouTube URL: {}", error_msg),
+                ).into_response();
+            }
+        }
+        Err(e) => {
+            tracing::error!("Failed to execute yt-dlp: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to execute yt-dlp. Make sure it's installed.",
+            ).into_response();
+        }
+    };
+
+    tracing::info!("Got direct URL, starting ffmpeg stream");
+
+    // Step 2: Use ffmpeg to fetch and transcode the direct URL (starts producing audio immediately)
+    let mut child = match TokioCommand::new("ffmpeg")
+        .args(&[
+            "-reconnect", "1",
+            "-reconnect_streamed", "1",
+            "-reconnect_delay_max", "5",
+            "-i", &direct_url,
+            "-f", "mp3",
+            "-b:a", "128k",
+            "-vn",
+            "-loglevel", "error",
+            "pipe:1"
+        ])
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
         .spawn()
     {
         Ok(child) => child,
         Err(e) => {
-            tracing::error!("Failed to spawn streaming pipeline: {}", e);
+            tracing::error!("Failed to spawn ffmpeg: {}", e);
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                "Failed to start streaming pipeline",
+                "Failed to start ffmpeg streaming",
             ).into_response();
         }
     };
