@@ -1,0 +1,40 @@
+{
+  "updated_at": "2026-01-25T00:41:19.062291+00:00",
+  "feeds": [
+    {
+      "feed_id": "kbos",
+      "name": "KBOS Tower",
+      "listeners": 28,
+      "stream_url": "http://d.liveatc.net/kbos",
+      "rank": 1
+    },
+    {
+      "feed_id": "katl",
+      "name": "KATL Tower",
+      "listeners": 24,
+      "stream_url": "http://d.liveatc.net/katl",
+      "rank": 2
+    },
+    {
+      "feed_id": "rjtt",
+      "name": "RJTT Tokyo Control",
+      "listeners": 24,
+      "stream_url": "http://d.liveatc.net/rjtt",
+      "rank": 3
+    },
+    {
+      "feed_id": "kjfk",
+      "name": "KJFK Gnd/Twr",
+      "listeners": 22,
+      "stream_url": "http://d.liveatc.net/kjfk",
+      "rank": 4
+    },
+    {
+      "feed_id": "kdfw",
+      "name": "KDFW Tower (East)",
+      "listeners": 22,
+      "stream_url": "http://d.liveatc.net/kdfw",
+      "rank": 5
+    }
+  ]
+}
