@@ -8,6 +8,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
+use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use tokio::process::Command as TokioCommand;
 use tokio_util::io::ReaderStream;
@@ -51,6 +52,21 @@ struct YoutubeStreamInfo {
     title: String,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct TopFeed {
+    rank: u32,
+    feed_id: String,
+    name: String,
+    listeners: u32,
+    stream_url: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct TopFeedsData {
+    updated_at: Option<String>,
+    feeds: Vec<TopFeed>,
+}
+
 #[tokio::main]
 async fn main() {
     tracing_subscriber::registry()
@@ -70,6 +86,7 @@ async fn main() {
         .route("/api/health", get(health_check))
         .route("/api/atc-stations", get(get_atc_stations))
         .route("/api/music-sources", get(get_music_sources))
+        .route("/api/top-feeds", get(get_top_feeds))
         .route("/api/proxy/stream", get(proxy_stream))
         .route("/api/youtube/extract", get(extract_youtube_url))
         .route("/api/stream/music/:source_id", get(stream_music))
@@ -150,6 +167,41 @@ async fn get_atc_stations() -> Json<ApiResponse<Vec<AtcStation>>> {
     Json(ApiResponse {
         success: true,
         data: stations,
+    })
+}
+
+async fn get_top_feeds() -> Json<ApiResponse<TopFeedsData>> {
+    // Try to read from the cached JSON file
+    let data_path = PathBuf::from("data/top_feeds.json");
+
+    let top_feeds_data = match tokio::fs::read_to_string(&data_path).await {
+        Ok(contents) => {
+            match serde_json::from_str::<TopFeedsData>(&contents) {
+                Ok(data) => {
+                    tracing::debug!("Loaded {} top feeds from cache", data.feeds.len());
+                    data
+                }
+                Err(e) => {
+                    tracing::error!("Failed to parse top_feeds.json: {}", e);
+                    TopFeedsData {
+                        updated_at: None,
+                        feeds: vec![],
+                    }
+                }
+            }
+        }
+        Err(e) => {
+            tracing::warn!("Could not read top_feeds.json: {}. Run the scraper to populate.", e);
+            TopFeedsData {
+                updated_at: None,
+                feeds: vec![],
+            }
+        }
+    };
+
+    Json(ApiResponse {
+        success: true,
+        data: top_feeds_data,
     })
 }
 
