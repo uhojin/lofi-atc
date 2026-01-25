@@ -4,6 +4,7 @@
   import {
     getAtcStations,
     getMusicSources,
+    getTopFeeds,
     getProxyUrl,
     getMusicStreamUrl,
   } from "./lib/api.js";
@@ -27,8 +28,11 @@
   let audioEngine;
   let atcStations = [];
   let musicSources = [];
+  let topFeeds = [];
+  let topFeedsUpdatedAt = null;
   let selectedAtcStation = null;
   let selectedMusicSource = null;
+  let stationTab = "top"; // "top" or "all"
   let atcVolume = [0.7];
   let musicVolume = [0.5];
   let isPlaying = false;
@@ -173,13 +177,18 @@
     try {
       audioEngine = new AudioEngine();
 
-      const [stations, sources] = await Promise.all([
+      const [stations, sources, topFeedsData] = await Promise.all([
         getAtcStations(),
         getMusicSources(),
+        getTopFeeds(),
       ]);
 
       atcStations = stations;
       musicSources = sources;
+      if (topFeedsData) {
+        topFeeds = topFeedsData.feeds || [];
+        topFeedsUpdatedAt = topFeedsData.updated_at;
+      }
       loading = false;
     } catch (err) {
       console.error("Failed to load data:", err);
@@ -288,6 +297,40 @@
     if (!error) {
       showStationSelector = false;
     }
+  }
+
+  async function handleTopFeedSelect(feed) {
+    // Create a station-like object from the top feed
+    const station = {
+      id: feed.feed_id,
+      name: feed.name,
+      airport_code: feed.feed_id.toUpperCase().split('_')[0],
+      frequency: "",
+      description: feed.name,
+      stream_url: feed.stream_url,
+    };
+    await handleAtcStationSelect(station);
+    if (!error) {
+      showStationSelector = false;
+    }
+  }
+
+  function formatTimeAgo(isoString) {
+    if (!isoString) return "";
+    const date = new Date(isoString);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+
+    if (diffMins < 1) return "just now";
+    if (diffMins === 1) return "1 min ago";
+    if (diffMins < 60) return `${diffMins} mins ago`;
+
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours === 1) return "1 hour ago";
+    if (diffHours < 24) return `${diffHours} hours ago`;
+
+    return "over a day ago";
   }
 
   function handleMusicSelectFromModal(source) {
@@ -786,6 +829,29 @@
             </svg>
           </Button>
         </div>
+
+        <!-- Tab Buttons -->
+        <div class="flex gap-2 mb-4">
+          <button
+            class="flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors {stationTab === 'top'
+              ? 'bg-primary text-primary-foreground'
+              : 'bg-zinc-800 text-muted-foreground hover:bg-zinc-700'}"
+            on:click={() => (stationTab = "top")}
+            type="button"
+          >
+            Top
+          </button>
+          <button
+            class="flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors {stationTab === 'all'
+              ? 'bg-primary text-primary-foreground'
+              : 'bg-zinc-800 text-muted-foreground hover:bg-zinc-700'}"
+            on:click={() => (stationTab = "all")}
+            type="button"
+          >
+            All
+          </button>
+        </div>
+
         {#if error}
           <div
             class="rounded-lg bg-destructive/10 border border-destructive/20 p-2.5 sm:p-3 text-xs sm:text-sm text-destructive mb-4"
@@ -793,9 +859,91 @@
             {error}
           </div>
         {/if}
-        <div
-          class="flex-1 overflow-y-auto space-y-2.5 sm:space-y-3 md:space-y-3.5"
-        >
+
+        <!-- Top Feeds Tab -->
+        {#if stationTab === "top"}
+          <div
+            class="flex-1 overflow-y-auto space-y-2.5 sm:space-y-3 md:space-y-3.5"
+          >
+            {#if topFeeds.length === 0}
+              <div class="text-center py-8 text-muted-foreground">
+                <p class="text-sm">No top feeds available</p>
+                <p class="text-xs mt-1">Run the scraper to populate this list</p>
+              </div>
+            {:else}
+              {#each topFeeds as feed}
+                {@const isCurrentlyPlaying =
+                  isPlaying && selectedAtcStation?.id === feed.feed_id}
+                <button
+                  class="w-full rounded-lg border border-zinc-800 p-3.5 sm:p-4 md:p-5 text-left transition-colors hover:bg-accent hover:border-zinc-700 {selectedAtcStation?.id ===
+                  feed.feed_id
+                    ? 'border-primary bg-accent'
+                    : ''}"
+                  on:click={() => handleTopFeedSelect(feed)}
+                  type="button"
+                >
+                  <div class="flex items-start gap-3">
+                    <!-- Rank Badge -->
+                    <div
+                      class="flex-shrink-0 w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center font-bold text-sm sm:text-base text-white"
+                    >
+                      {feed.rank}
+                    </div>
+                    <div class="flex-1 min-w-0">
+                      <div class="flex items-center justify-between gap-2">
+                        <p class="font-medium text-base sm:text-lg truncate">
+                          {feed.name}
+                        </p>
+                        {#if isCurrentlyPlaying}
+                          <div
+                            class="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-green-500/20"
+                          >
+                            <div
+                              class="w-1.5 h-1.5 bg-green-500 rounded-full {isPaused
+                                ? 'bg-orange-400'
+                                : 'animate-pulse'}"
+                            ></div>
+                            <span class="text-[10px] text-green-400 font-medium"
+                              >{isPaused ? "Paused" : "Live"}</span
+                            >
+                          </div>
+                        {/if}
+                      </div>
+                      <div
+                        class="flex items-center gap-2 mt-1 text-sm text-muted-foreground"
+                      >
+                        <div class="flex items-center gap-1">
+                          <svg
+                            class="w-3.5 h-3.5"
+                            fill="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"
+                            />
+                          </svg>
+                          <span class="tabular-nums">{feed.listeners}</span>
+                        </div>
+                        <span class="text-zinc-600">listening</span>
+                      </div>
+                    </div>
+                  </div>
+                </button>
+              {/each}
+            {/if}
+          </div>
+          {#if topFeedsUpdatedAt}
+            <div class="pt-3 mt-3 border-t border-zinc-800/50 text-center">
+              <p class="text-xs text-muted-foreground">
+                Updated {formatTimeAgo(topFeedsUpdatedAt)}
+              </p>
+            </div>
+          {/if}
+        {:else}
+          <!-- All Stations Tab -->
+          <div
+            class="flex-1 overflow-y-auto space-y-2.5 sm:space-y-3 md:space-y-3.5"
+          >
           {#each airportCodes as airportCode}
             {@const stations = groupedStations[airportCode]}
             {@const currentIndex = airportStationIndex[airportCode] ?? 0}
@@ -933,7 +1081,8 @@
               {/if}
             </div>
           {/each}
-        </div>
+          </div>
+        {/if}
       </div>
     </Sheet>
   {/if}
