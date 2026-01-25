@@ -1,0 +1,26 @@
+[Unit]
+Description=Lofi ATC Top Feeds Scraper
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/lofi-atc/server/scraper
+Environment="PATH=/opt/lofi-atc/server/scraper/.venv/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="PLAYWRIGHT_BROWSERS_PATH=/opt/lofi-atc/server/scraper/.venv/ms-playwright"
+ExecStart=/opt/lofi-atc/server/scraper/.venv/bin/python top_feeds_playwright.py --daemon --interval 30
+Restart=always
+RestartSec=60
+StandardOutput=append:/var/log/lofi-atc-scraper.log
+StandardError=append:/var/log/lofi-atc-scraper.log
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/lofi-atc/server/data
+
+[Install]
+WantedBy=multi-user.target
