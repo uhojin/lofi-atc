@@ -9,6 +9,12 @@ export async function getAtcStations() {
   return data.data;
 }
 
+export async function getTopFeeds() {
+  const response = await fetch(`${API_BASE_URL}/top-feeds`);
+  const data = await response.json();
+  return data.data;
+}
+
 export async function getMusicSources() {
   const response = await fetch(`${API_BASE_URL}/music-sources`);
   const data = await response.json();
